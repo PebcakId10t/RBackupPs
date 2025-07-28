@@ -124,8 +124,8 @@ function Start-RBackupPS {
             Write-Log "Group: $($group.name)"
             $jobs = $group.jobs
             switch ($Mode) {
-                "push" { $jobs = $jobs | Where-Object { -not $_.mode -or $_.mode -contains "push" } }
-                "pull" { $jobs = $jobs | Where-Object { $_.mode -contains "pull"} }
+                "push" { $jobs = $jobs | Where-Object { -not $_.mode -or $_.mode -eq "push" } }
+                "pull" { $jobs = $jobs | Where-Object { $_.mode -eq "pull"} }
                 * {}
             }
             if (-not $jobs) {

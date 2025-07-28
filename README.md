@@ -14,8 +14,9 @@ using variables (`$rbackupRunTime`) in your destination path.  I don't do
 versions so I haven't tested it.  See [variables](#environment-variables) below.
 
 Everything is entered manually into JSON config files, there is no GUI or
-config generator or anything like that.  Just DIY automation.  It's a shell
-script with some options for flexibility and quick deployment.
+config generator or anything like that.  Just a PowerShell script for backup
+automation with some predefined settings for quick deployment and options for
+flexibility.
 
 Configs are searched for under `$HOME/.config/rbackup/` by default - even on
 Windows - but if this doesn't suit you just pass the script the full path to a
@@ -25,7 +26,7 @@ for whatever host or `rclone` remote they back up to.
 I created the first version of this a while back and tweaked it over the years
 and finally decided to share it in case someone else might find it helpful.
 
-There are probably bugs I don't know about but it works for my personal backups.
+There could be bugs I don't know about but it works for my personal backups.
 Enjoy.
 
 Thank you to the developers of [rclone](https://rclone.org) and
@@ -44,11 +45,10 @@ local networked systems.
 
 ### Backup root and trunk
 
-Backup jobs have a source and destination.  These are either computed as
-`<root>/<trunk>/<source or destination dir>` or specified as absolute paths,
-depending on the type (`"mode"`) of the job and what source and destination
-attributes are set.  See [job attributes](#job-attributes) below for more
-details.
+Backup jobs have a source and destination.  These are either specified as
+absolute paths or computed as `<root>/<trunk>/<source or destination dir>`,
+depending on what source and destination attributes are used.  See
+[job attributes](#job-attributes) below for more details.
 
 `"root"` should be self-explanatory and needs to be defined at the config level.
 It is shared by all jobs in the config.  For local and host backups, it should
@@ -57,37 +57,55 @@ that evaluates to one).  For cloud backups (`rclone` remotes), it should be the
 root directory/bucket/whatever where your backups live.
 
 (*Side note: I only use Google Drive so I don't actually have any experience
-with "buckets".  Feel free to test this with other remotes, but I don't have any
-inclination to do so at the moment.*)
+with "bucket" based remotes.  Feel free to test this with other remotes, but I
+don't have any inclination to do so at the moment.*)
 
-`"trunk"` is a subdirectory under the root.  The "trunk" for most of my local and
-cloud backups is the hostname of the system the backup came from.  This should
-allow for easier restoration after a system wipe.
+`"trunk"` is what subdirectory under the root to backup/write to.  The "trunk"
+for most of my local and cloud backups is the hostname of the system the backup
+came from.
 
-### Normal backups
+### Job modes - push and pull
 
-For most normal backups, the `"root"` and `"trunk"` attributes are combined with
-a `"destinationRemote"` attribute that should be the subdirectory or subpath under
-`<root>/<trunk>/` to store the backup in.
+Jobs have an optional `"mode"` attribute that can be set to either `"push"`
+or `"pull"`.  This is meant only as a means of separating backup jobs from
+backup restoration jobs and determining which ones run when the script is
+executed.  `"push"` jobs are meant to be backup jobs, while `"pull"` jobs
+restore backups, "pulling" backed up files from a remote destination.
+There are no technical differences between the two modes, only semantics.
+Source and destination are computed the same for both.  See below.
 
-The source of the backup should normally be specified using the `"source"`
-attribute as the absolute path to the local source directory to back up.
+If a job does not specify its `"mode"`, it defaults to `"push"`.
 
-There are other possibilities, see below for an explanation of the attributes.
+### Source and destination
 
-### Restoring backups
+Source and destination can either be specified as absolute paths or relative
+paths that depend on `"root"` and `"trunk"`.
 
-For restoring backups, use the opposite approach.  The destination
-(`"destination"`) is an absolute path on the local system, whereas the source
-(`"sourceRemote"`) is specified as a subdirectory or subpath of `<root>/<trunk>/`
-to pull the backup from.
+Use `"source"` to specify an absolute path to the backup source, or
+`"sourceRemote"` to specify a subdirectory or path under `<root>/<trunk>`.
+If both are present, `"source"` is used.  *If neither is present, source will
+be treated as an empty string ("").*
+
+Use `"destination"` to specify an absolute path to the destination, or
+`"destinationRemote"` to specify a subdirectory or path under `<root>/<trunk>`.
+If both are present, `"destination"` is used.
+
+`"sourceRemote"` is meant to be used with `"pull"` jobs (backup restoration),
+while `"destinationRemote"` would more commonly be used with `"push"` backup
+jobs.
+
+Note that any of these attributes can be used in any job type.  Jobs that use
+both remote-relative attributes may work entirely on the remote side and involve
+no local files (this may only work with `rclone` jobs), whereas the absolute
+attributes allow using any arbitrary local or remote path for source and
+destination.
 
 ### Path variable subtitution and separators
 
 All paths will have variable subsitution performed and be converted to
 POSIX-style paths (backslashes converted to forward slashes).  If a path (or
-final component of the assembled path) ends with a separator, the trailing path
-separator is retained.
+final path component, ie. `"sourceRemote"`/`"destinationRemote"`) ends with
+a path separator, the trailing separator is retained.
 
 Whatever rules exist for `rsync`/`rclone` regarding trailing separators still
 apply here.  If source ends with a path separator, `rsync` will always copy the
@@ -122,7 +140,7 @@ way, every system has all my shell scripts.
 
 This is accomplished by setting the `"trunk"` of the backup to `"bin"` and the
 `"destinationRemote"` to an empty string.  (Or set `"destinationRemote"` to
-`"bin"` and leave `"trunk"` empty.  Either way, `[System.IO.Path]::Combine(...)`
+`"bin"` and `"trunk"` to empty.  Either way, `[System.IO.Path]::Combine(...)`
 evaluates to `<root>/bin`.)
 
 Host backups are intended for duplicating file trees from one local system to
@@ -130,10 +148,9 @@ another (music libraries, etc), thus the default `"trunk"` for these is an empty
 string (so your music library gets synced to `~/Music/` on the remote host instead
 of `~/<local hostname>/Music/`).
 
-If you want to change this behavior, feel free to set the trunk to whatever you
-want.  If you want host backups to work the same as cloud, you can set the
-`"trunk"` to `$rbackupMachineName`
-(see [environment variables](#environment-variables) below).
+If you want to change this behavior, set the trunk to whatever you want.  If you
+want host backups to work the same as cloud, you can set the `"trunk"` to
+`$rbackupMachineName` (see [environment variables](#environment-variables) below).
 
 ## Config attributes
 
@@ -144,11 +161,12 @@ want.  If you want host backups to work the same as cloud, you can set the
 
 - `"root"` - Root directory of the backup.  For local backups, ideally this is
 an absolute path.  For cloud/host, it could be absolute or relative to the
-remote's *actual* root or user home directory (it is appended to the `"remote"`
+remote's actual root or user home directory (it is appended to the `"remote"`
 after a colon `:`, as in `"remote:root"`).
 
 - `"trunk"` - Subdirectory of backup root to use.  Used as part of the
-source path for jobs that do not specify their own "trunk" to override this.
+source/destination path for jobs that do not specify their own "trunk" to
+override this.
 
 - `"timeFormat"` - Change the time format for logging if desired.
 See [date and time formats](https://learn.microsoft.com/en-us/dotnet/standard/base-types/standard-date-and-time-format-strings).
@@ -172,43 +190,28 @@ jobs in the group to be skipped.
 
 - `"description"` - Optional.  A short description.
 
-- `"mode"` - If not set, defaults to `"push"`.  Viable options are `"push"`,
-`"pull"`, or a combination of both (`["push", "pull"]`, `"push/pull"`, etc.)
+- `"mode"` - Options are `"push"`, `"pull"`.  If not set, defaults to `"push"`.
 Mostly just a way of controlling which jobs run when the script is called, but
-can be used to logically separate backup restoration jobs from backup creation
-ones.  Also determines whether `"source"` or `"sourceRemote"` is used to
-represent the backup source.  See notes below.
+could be used to logically separate backup restoration jobs from backup creation
+ones.
 
 - `"trunk"` - Overrides config `"trunk"` per job.  Subdirectory of backup root.
-Combined with `"root"` and `"destinationRemote"` for `"push"` jobs, or 
-`"sourceRemote"` for `"pull"` jobs.
 
 ### Source
 
-- `"source"` - The absolute path to the source directory/file/whatnot to
-back up/copy/sync.  *Primarily* used with normal backups (`"push"`-mode jobs),
-but will be used for `"pull"` jobs as well *only* if `"sourceRemote"` is unset.
+- `"source"` - The absolute path to the source.
 
-- `"sourceRemote"` - Path to the source directory, relative to the `"root"` and
-`"trunk"` of the backup.  **Only** used for "pull" jobs (which are normally used
-for backup restoration).  Will be used instead of `"source"` if present. Combines
-with `"root"` and `"trunk"` to form the complete source path.
+- `"sourceRemote"` - Path to the source, relative to `"root"` and `"trunk"`
+(`<root>/<trunk>/<sourceRemote>`).  Most commonly used for backup restoration.
+Only used if `"source"` is unset.
 
 ### Destination
 
-- `"destination"` - The absolute path to the destination.  Will be used instead
-of `<root>/<trunk>/<destinationRemote>` if present.  Primarily used with backup
-restoration to a local absolute path, but *could* also be used for backup (`"push"`)
-to a path outside of the normal backup root/trunk like so:
-``` json
-"source": "path/to/source",
-"destination": "myOtherRcloneRemote:path/"
-```
+- `"destination"` - The absolute path to the destination.
 
-- `"destinationRemote"` - Path to the destination directory, relative to the
-`"root"` and `"trunk"` of the backup.  Primarily used with normal backups.
-(`"push"`-mode jobs).  Combined with `"root"` and `"trunk"` to form the complete
-destination path.  Only used if `"destination"` is unset.
+- `"destinationRemote"` - Path to the destination, relative to `"root"` and
+`"trunk"` (`<root>/<trunk>/<destinationRemote>`).  Most commonly used for
+normal backups.  Only used if `"destination"` is unset or empty/whitespace.
 
 ### Optional/extra
 
@@ -222,29 +225,30 @@ destination path.  Only used if `"destination"` is unset.
 
 ### Required attributes
 
-Besides `"source"` and the backup command itself, local backups require only that
+Besides a "source" and the backup command itself, local backups require only that
 `"root"` be set.  They can use `rclone` or `rsync`.  Cloud and host backups also
-require a `"remote"`.  This could be a name (like an rclone remote name), IP
+require a `"remote"`.  This should be a name (like an rclone remote name), IP
 address, etc. -- anything that will be recognized by rclone or rsync as a remote
 target.
 
 The `"command"` attribute of a backup job has three components: `"exec"`,
-`"args"`, and `"subcommand"` (for `rclone` only).  `"exec"` should match (end with)
-`rclone` or `rsync` (`rclone.exe`, `rsync.exe`, or `cwrsync.exe` for Windows) for
-script logic to work.
+`"args"`, and `"subcommand"` (for `rclone` only).  `"exec"` should *end with*
+`rclone` or `rsync` (`rclone.exe` or `rsync.exe` for Windows) for script logic
+to work.
 
 `"args"` should be an array of commandline arguments to pass.  You don't need to
 pass arguments like "--verbose", "--dry-run", etc as these are automatically
 appended when the script is run with these arguments.  If using rclone,
 `"subcommand"` is what rclone subcommand to use (`copy`, `sync`, etc).  If not
 specified, it will default to `"check"`.  (This is to prevent data loss as `check`
-is nondestructive.)
+should be nondestructive.)
 
-Cloud backups only support `rclone`, which should handle all the connection and
+Cloud backups should only use `rclone`, which should handle all the connection and
 user details itself.  (Run `rclone config` to setup a new remote.)
 
 Host backups can use `rclone` or `rsync`.  If using `rsync`, you'll need to specify
-a username if different from your current username.
+a username if different from your current username or rsync will be unable to
+connect.
 
 It is assumed you probably use the same username on both systems but if not, add
 the user to the top of the config or to each individual backup job in the config
@@ -256,7 +260,6 @@ Example "host" config
 ``` json
 {
     "type": "host",
-    // IP address or mDNS hostname
     "remote": "laptop.local",
     "root": "/home/jdoe/",
     "user": "jdoe",
@@ -292,20 +295,12 @@ Example "host" config
                     }
                 }
             ]
-        },
-        {
-            "name": "work",
-            "jobs": [
-                ...
-            ]
-            ...
         }
-        ...
     ]
 }
 ```
 
-My `~/bin` backup group/job
+My `~/bin` backup job
 ``` json
 {
     "name": "bin",
@@ -346,19 +341,8 @@ RBackupPS will look for any JSON/JSONC files matching the given name in the
 `$HOME/.config/rbackup/` directory.
 
 - `-Mode` - Backup mode to run in.  One of: "push" (the default), "pull", or "any".
-Affects which jobs are selected to run and in which direction (only for jobs
-where `"mode"` includes both "push" and "pull", eg. `["push", "pull"]`).
-
-A word on **mode**s:
-> Each job in a config may specify a `"mode"` that it is said to operate in.  Jobs
-that do not specify a mode are considered "push" mode by default and will run if
-the script's `-Mode` parameter is set to `push` or `any`.  Backups are normally
-an act of copying/syncing a source to a destination.  This is what I'm referring
-to as `push`ing.
-
-> Jobs where `"mode"` is set to the string value `"pull"` will be run when the
-script's `-Mode` parameter is set to either `pull` or `any`.  Think of these as
-backup restoration jobs.
+Affects which jobs are selected to run.  If set to `any`, all jobs of either mode
+will be run, in the order they appear in the config.
 
 - `-LocalBackupRoot` - Only for local backups, the root of the local backup.
 Overrides `"root"` defined in the config file if set.  Use this for backing up
@@ -393,18 +377,77 @@ otherwise `"newer"` is used.
 
 ## Other things
 
+### Safety features
+
+Use `-Interactive` to confirm before running each job.  The commandline should
+be printed before the confirmation (sometimes it prints after due to issues
+with logging to console).
+
+Use `-DryRun` to run rclone/rsync in dry-run mode.  No changes will be made.
+
 ### Restoring from backup
 
-**Mostly untested.**
+The easiest way is probably to create a `"pull"`-mode counterpart for every
+backup job in your config.  If you prefer you can keep them in a separate group.
+The default script mode is "push", so as long as the jobs are marked as "pull"
+mode, they should not be executed without explicit user intervention.
 
-The safest way is probably to create a `"pull"`-mode counterpart for every
-`"push"` job in your config.  If you prefer you can keep them in a separate group.
-The default script `-Mode` value is `push`, so as long as the jobs are marked with
-`"mode": "pull"`, they should not executed without explicit user intervention.
+Backup and restore in the same group:
 
-``` json
-"type": "cloud"
-"remote": "remotename"
+``` jsonc
+"type": "cloud",
+"remote": "remotename",
+"root": "backup",
+"groups": [
+    {
+        "name": "home",
+        "jobs": [
+            {
+                "enabled": true,
+                "name": "backup home",
+                "source": "$HOME/",
+                "destinationRemote": "",
+                // ...
+            },
+            {
+                "enabled": true,
+                "name": "restore home",
+                "mode": "pull",
+                "sourceRemote": "",
+                "destination": "$HOME",
+                // ...
+            }
+        ]
+    },
+    {
+        "name": "bin",
+        "jobs": [
+            {
+                "enabled": true,
+                "name": "backup bin",
+                "source": "$HOME/bin/",
+                "destinationRemote": "bin",
+                // ...
+            },
+            {
+                "enabled": true,
+                "name": "restore bin",
+                "mode": "pull",
+                "sourceRemote": "bin",
+                "destination": "$HOME/bin",
+                // ...
+            }
+        ]
+    }
+]
+```
+
+Separate groups:
+
+``` jsonc
+"type": "cloud",
+"remote": "remotename",
+"root": "backup",
 "groups": [
     {
         "name": "backups",
@@ -412,18 +455,17 @@ The default script `-Mode` value is `push`, so as long as the jobs are marked wi
             {
                 "enabled": true,
                 "name": "backup home",
-                "source": "$HOME",
+                "source": "$HOME/",
                 "destinationRemote": "",
-                ...
+                // ...
             },
             {
                 "enabled": true,
-                "name": "bin",
+                "name": "backup bin",
                 "source": "$HOME/bin/",
                 "destinationRemote": "bin",
-                ...
+                // ...
             }
-            ...
         ]
     },
     {
@@ -435,7 +477,7 @@ The default script `-Mode` value is `push`, so as long as the jobs are marked wi
                 "mode": "pull",
                 "sourceRemote": "",
                 "destination": "$HOME",
-                ...
+                // ...
             },
             {
                 "enabled": true,
@@ -443,25 +485,22 @@ The default script `-Mode` value is `push`, so as long as the jobs are marked wi
                 "mode": "pull",
                 "sourceRemote": "bin",
                 "destination": "$HOME/bin",
-                ...
+                // ...
             }
-            ...
         ]
     }
 ]
 ```
 
-Another option is to implement jobs with support for both `"push"` and `"pull"`
-modes (setting `"mode"` to `["push", "pull"]`), but the obvious downside to this
-is that ***each job can only have one set of flags***.  Use this with *extreme*
-caution, and only do this if you are certain that the same flags can be used for
-both `push` and `pull` modes without corrupting or deleting your data.
-As always, **perform a dryrun first**.
-
 ### Mailing
 
 Mailing info will be read from a JSON config file pointed to by the environment
 variable `$MAIL_CONFIG` (`$env:MAIL_CONFIG` in Windows).
+
+This file is ***plaintext***.  It's *not* secure, and is not intended to be.
+As such, don't store credentials for important accounts in this file, or any
+other.  Use a throwaway account.
+
 The config looks like this:
 
 ``` json
@@ -472,13 +511,16 @@ The config looks like this:
     "MAIL_FROM": "..."
 }
 ```
+
 The `MAIL_FROM` field is optional and should be a name and email address the way
 they are typically displayed in email clients (`"My Name <my@email.domain>"`).
 This is who the email will appear to have come from.
 
 Note: Your email server will need to be configured to accept this "lower security"
-login method.  I'm using a Gmail account configured with an "app password".
+login method.  I'm using an account configured with an "app password".
 
+This uses the `Send-MailMessage` cmdlet, which is deprecated and should not
+be used for secure email tasks.
 
 ### Filtering
 
@@ -539,20 +581,3 @@ attribute consisting of tasks to run once the job completes successfully.
     }
 ]
 ```
-
-### DIY Bisyncing
-
-More on **mode**s:
-
-A sort of DIY "bisync" can be achieved by chaining jobs (one `"pull"`, one
-`"push"`) in the desired order.  (*Tip: Don't use rclone's `sync` subcommand for
-both jobs unless you want to lose data at the source, destination, or both.
-One or both jobs should probably be `copy` mode so that extraneous files at the
-other end of the sync are not deleted before the second job runs.*)
-
-Another way to achieve this is by creating a single job that can work in either
-`push` or `pull` mode, depending on the script parameter, but this is risky,
-unintuitive, and unnecessary.
-
-Unless you have an aversion to using beta features, if you want `bisync`-like
-behavior, just use `rclone bisync`.  I personally use it often, and it works great.

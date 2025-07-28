@@ -120,31 +120,23 @@ function Get-JobCommand {
         $root = "$($config.remote):$($config.root)"
     }
 
-    # "sourceRemote" is used for restoring from backup ("pull" mode)
-    # and is treated just like "destinationRemote" normally is for "push" jobs.
-    # It is combined with root and trunk using [System.IO.Path]::Combine()
-    # to form the full remote source path.
-    if ([bool]($job.PSObject.Properties.Name -match "sourceRemote") -and $config.mode -eq "pull") {
-        $src = [System.IO.Path]::Combine($root, $trunk, $job.sourceRemote) | Out-Path
-    # "source" is normally used for "push" jobs and is treated as an absolute
-    # path to the source directory to back up (it is unmodified except for
-    # path separator replacement and variable substitution).  It can also be
-    # used with "pull" jobs but only if "sourceRemote" is unset.
-    } elseif ([bool]($job.PSObject.Properties.Name -match "source")) {
+    # "source" is absolute path to source
+    if ([bool]($job.PSObject.Properties.Name -match "source$")) {
         $src = $job.source | Out-Path
     }
+    # "sourceRemote" relative to root/trunk
+    elseif ([bool]($job.PSObject.Properties.Name -match "sourceRemote")) {
+        $src = [System.IO.Path]::Combine($root, $trunk, $job.sourceRemote) | Out-Path
+    }
+    else {
+        $src = ""
+    }
 
-    # "destination" is the counterpart of "source" for backup restoration
-    # ("pull" mode) and is treated as an absolute path to the destination
-    # (presumably a local path).  (It can also theoretically be used with
-    # "push" jobs to backup to an absolute remote path if desired, such as
-    # a path outside of the normal backup root/trunk.
-    if ([bool]($job.PSObject.Properties.Name -match "destination$")) {
+    # "destination" is absolute path to destination.  Must not be empty/whitespace,
+    # else use root/trunk/destinationRemote
+    if ([bool]($job.PSObject.Properties.Name -match "destination$") -and ([string]$job.destination).Trim()) {
         $dest = $job.destination | Out-Path
-    # "destinationRemote" is the final path component for ordinary ("push")
-    # backup jobs and is combined with root and trunk to form the destination
-    # for the backup. (If not present or an empty string, the destination path
-    # will simply be $root/$trunk)
+    # "destinationRemote" relative to root/trunk, if empty dest = root/trunk
     } else {
         $dest = [System.IO.Path]::Combine($root, $trunk, $job.destinationRemote) | Out-Path
     }
