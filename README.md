@@ -32,6 +32,12 @@ Enjoy.
 Thank you to the developers of [rclone](https://rclone.org) and
 [rsync](https://rsync.samba.org)!
 
+## Dependencies
+
+Logging functionality uses the PowerShell logging module located
+[here](https://github.com/RootITUp/Logging).  It's used for console as well as
+file logging.
+
 ## Backup types and attributes
 
 Each config needs a `"type"` attribute that applies to all groups/jobs defined
