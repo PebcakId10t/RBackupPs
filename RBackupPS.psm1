@@ -1,31 +1,29 @@
-#Requires -Module Logging
-
 function Start-RBackupPS {
-    [CmdletBinding()]
+    [CmdletBinding(DefaultParameterSetName='Local')]
     param(
         [Parameter(Mandatory, Position=0)]
         [Alias("file")]
-        [string] $ConfigName,
+        [string] $ConfigFile,
 
         [Parameter(Position=1)]
         [ValidateSet("push", "pull", "any")]
         [string] $Mode = "push",
 
-        [Parameter(Position=2)]
-        [Alias("root")]
-        [string] $LocalBackupRoot,
+        [Parameter(ParameterSetName='Local')]
+        [string] $Root,
+
+        [Parameter(ParameterSetName='Nonlocal')]
+        [string] $Remote,
 
         [string] $Trunk,
 
-        [Parameter()]
         [Alias("group")]
         [string[]] $IncludeGroups,
 
-        [Parameter()]
         [Alias("nogroup")]
         [string[]] $ExcludeGroups,
 
-        [string] $LogFile,
+        [string] $LogTo,
 
         [string] $MailTo,
 
@@ -42,14 +40,16 @@ function Start-RBackupPS {
             Write-Debug "  $($p.Key): $($p.Value)"
         }
 
-        # Vars set here will be available for path subsitutions, etc.
-        $rbackupMachineName = [Environment]::MachineName
-        $rbackupConfigName = Split-Path $ConfigName -LeafBase
-        $rbackupRunTime = (Get-Date -Format "yyyyMMdd-HHmmss")
+        # Available for path subsitutions
+        $machineName = [Environment]::MachineName
+        $configName = Split-Path $ConfigFile -LeafBase
+        $datetime = (Get-Date -Format "yyyy-MM-dd-HHmmss")
+        $date = (Get-Date -Format "yyyy-MM-dd")
 
         # Shut up stupid unused variable warnings
-        Write-Debug "Config name: $rbackupConfigName"
-        Write-Debug "Running on host: $rbackupMachineName, at $rbackupRunTime"
+        Write-Debug "Config name: $configName"
+        Write-Debug "Running on host: $machineName, on $date"
+        Write-Debug "$datetime"
 
         <# Keeps paths cross-platform (replaces \ with /), expands variables. #>
         filter Out-Path {
@@ -74,8 +74,9 @@ function Start-RBackupPS {
         }
 
         $configParams = @{
-            configName = $ConfigName
-            localBackupRoot = $LocalBackupRoot
+            configName = $ConfigFile
+            remote = $Remote
+            root = $Root
             trunk = $Trunk
         }
 
@@ -84,27 +85,25 @@ function Start-RBackupPS {
             mode = $Mode
             dryRun = $DryRun
             resync = $Resync
+            interactive = $Interactive
         }
 
         if ($PSBoundParameters['Verbose']) {
-            $config | Add-Member -NotePropertyMembers @{
-                verbose = $true
-            }
+            $config | Add-Member -MemberType NoteProperty -Name 'verbose' -Value $true -Force
         }
 
-        # Start-Logging will disable file logging if $LogFile == "none"/null/false
-        # ($null)
-        if ($PSBoundParameters.ContainsKey('LogFile') -and -not $LogFile) {
-            $LogFile = "none"
-        # ('false' / $false)
-        } elseif ($LogFile -match "^false$") {
-            $LogFile = "none"
+        # Start-Logging:
+        #   - console|$null|null|no|none|$false|false...
+        #     Disable logging module and use colorized Write-Host instead
+        if ($PSBoundParameters.ContainsKey('LogTo') -and -not $LogTo) {
+            $LogTo = 'console'
+        } elseif ($LogTo -match "^false|no(ne)?|nul|null$") {
+            $LogTo = 'console'
         }
 
-        Start-Logging $config $rbackupConfigName $LogFile $MailTo
+        Start-Logging $config $configName $LogTo $MailTo
 
         Write-Debug ($config | Format-List | Out-String)
-
         if ($config.logFile) {
             Write-Host "Logging to: $($config.logFile)"
         }
@@ -121,7 +120,8 @@ function Start-RBackupPS {
                 ($ExcludeGroups -and $group.name -in    $ExcludeGroups)) {
                 continue nextGroup
             }
-            Write-Log "Group: $($group.name)"
+            Script:Write-Logger " "
+            Script:Write-Logger "Group: $($group.name)"
             $jobs = $group.jobs
             switch ($Mode) {
                 "push" { $jobs = $jobs | Where-Object { -not $_.mode -or $_.mode -eq "push" } }
@@ -134,23 +134,24 @@ function Start-RBackupPS {
             $errorsEncountered = 0
             :nextJob foreach ($job in $jobs) {
                 if (-not $job.enabled) {
-                    Write-Log "Job '$($job.name)' not enabled, skipping"
+                    Script:Write-Logger "Job '$($job.name)' not enabled, skipping"
                     continue nextJob
                 }
                 $commandline = Get-JobCommand $job $config
-                Write-Log ('-'*(([string]$commandline).Length+9))
-                Write-Log "Job: '$($job.name)' - $($job.description)"
-                Write-Log "Command: $commandline"
-                Wait-Logging
-                if (-not $Interactive -or (Read-YesNoChoice "Run job '$($job.name)'?" -Default 'Yes')) {
+                Script:Write-Logger " "
+                Script:Write-Logger "Job: '$($job.name)' - $($job.description)"
+                Script:Write-Logger "Command: $commandline"
+                Script:Write-Logger ('-'*(([string]$commandline).Length+9))
+                # Wait-Logging
+                if (-not $Interactive -or (Read-YesNoChoice "`nRun job '$($job.name)'?" -Default 'Yes')) {
                     try {
                         Invoke-Job $job
-                        Write-Log "Job '$($job.name)' done.`n"
+                        Script:Write-Logger "Job '$($job.name)' done.`n"
                     } catch {
-                        Write-Log -Level ERROR -Message $_.Exception.Message
+                        Script:Write-Logger -Level ERROR -Message $_.Exception.Message
                         $errorsEncountered += 1
                         if ($group.skipOnFail) {
-                            Write-Log -Level WARNING `
+                            Script:Write-Logger -Level WARNING `
                                 -Message "Skip on fail set, skipping remaining jobs in group '$($group.name)'"
                             continue nextGroup
                         } else {
@@ -182,10 +183,8 @@ function Start-RBackupPS {
                 Body = "Backup has run with ${errorsEncountered} error(s).  See log for details."
                 UseSsl = $true
             }
-
             Write-Host "Emailing log...`n" -ForegroundColor Green
             $mailParams.Attachments = $config.logFile
-
             Send-MailMessage @mailParams
         }
     }

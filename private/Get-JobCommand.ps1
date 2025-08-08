@@ -8,40 +8,11 @@ function Get-JobCommand {
     $exec = $job.command.exec
     $cmdline = @($exec)
 
-    ## - Rclone
+    # rclone "check" if no subcommand specified
     if ($job.command.exec -match "rclone(\.exe)?$") {
-        # "check" (nondestructive default) if no subcommand specified
-        if ($job.command.subcommand) {
-            $cmdline += $job.command.subcommand
-        } else {
-            $cmdline += "check"
-        }
-
-        if ($job.filterFrom -is [String]) {
-            $ff = $job.filterFrom | Out-Path
-            # If bisync, "--filters-file" replaces "--filter-from"
-            if ($job.command.subcommand -eq "bisync") {
-                $cmdline += @("--filters-file", $ff)
-            } else {
-                $cmdline += @("--filter-from", $ff)
-            }
-        } elseif ($job.excludeFrom -is [String]) {
-            $ef = $job.excludeFrom | Out-Path
-            $cmdline += @("--exclude-from", $ef)
-        } elseif ($job.includeFrom -is [String]) {
-            $if = $job.includeFrom | Out-Path
-            $cmdline += @("--include-from", $if)
-        }
-
-        # For bisync, add "--resync-mode" flag if resyncing.
-        # If job specifies the resyncMode to use, use that, otherwise "newer"
-        if ($job.command.subcommand -eq "bisync" -and $config.resync) {
-            if ($job.resyncMode) {
-                $cmdline += @("--resync-mode", $job.resyncMode)
-            } else {
-                $cmdline += @("--resync-mode", "newer")
-            }
-        }
+        $cmdline += ($job.command.subcommand ?
+            $job.command.subcommand :
+            "check")
     }
 
     # Extra verbose if -verbose, else normal verbose
@@ -57,8 +28,53 @@ function Get-JobCommand {
         $cmdline += @("--log-file", $config.logFile)
     }
 
-    ## - Rsync include/exclude
-    if ($job.command.exec -match "rsync(\.exe)?$") {
+    # Variables for substitution
+    $user = $job.command.user ?? $job.user ?? $config.user
+    $root = $config.root
+    $remote = $config.remote ?? ''
+    $remotePath = ($remote -and $config.type -ne "local") ? "${remote}:${root}" : "$root"
+    if ($config.type -eq "host") {
+        if ($job.command.exec -match "rsync(\.exe)?$") {
+            if ($remote -and $remote -notmatch "^.*@.*") {
+                $remote = "${user}@${remote}"
+                $remotePath = "${user}@${remotePath}"
+            }
+        }
+    }
+    # If no "trunk" defined for job, use config trunk
+    # (?? preserves $job.trunk if empty string)
+    $trunk = ($job.trunk ?? $config.trunk) | Out-Path
+
+    # Filtering - rclone
+    if ($job.command.exec -match "rclone(\.exe)?$") {
+        if ($job.filterFrom -is [String]) {
+            $ff = $job.filterFrom | Out-Path
+            # If bisync, "--filters-file" replaces "--filter-from"
+            if ($job.command.subcommand -eq "bisync") {
+                $cmdline += @("--filters-file", $ff)
+            } else {
+                $cmdline += @("--filter-from", $ff)
+            }
+        } elseif ($job.excludeFrom -is [String]) {
+            $ef = $job.excludeFrom | Out-Path
+            $cmdline += @("--exclude-from", $ef)
+        } elseif ($job.includeFrom -is [String]) {
+            $if = $job.includeFrom | Out-Path
+            $cmdline += @("--include-from", $if)
+        }
+        # For bisync, add "--resync-mode" flag if resyncing.
+        # If job specifies the resyncMode to use, use that, otherwise "newer"
+        if ($job.command.subcommand -eq "bisync" -and $config.resync) {
+            if ($job.resyncMode) {
+                $cmdline += @("--resync-mode", $job.resyncMode)
+            } else {
+                $cmdline += @("--resync-mode", "newer")
+            }
+        }
+    }
+
+    # Filtering - rsync
+    elseif ($job.command.exec -match "rsync(\.exe)?$") {
         if ($job.excludeFrom -is [String]) {
             $ef = $job.excludeFrom | Out-Path
             $cmdline += @("--exclude-from", $ef)
@@ -68,80 +84,32 @@ function Get-JobCommand {
         }
     }
 
-    ## - Remaining args in "args" array
+    # Remaining args in "args" array
     if ($job.command.args -is [Array]) {
         $cmdline += ($job.command.args | Out-Path)
     }
 
-    ## - Src & dest
-
-    # If no "trunk" attr in job, use config trunk
-    if (-not [bool]($job.PSObject.Properties.Name -match "trunk")) {
-        $trunk = $config.trunk
-    } else {
-        $trunk = $job.trunk
-    }
-
-    if ($config.type -eq "local")
-    {
-        # Local backups can use rclone or rsync.  $config.root is the root of
-        # the backup.  (Get-Config ensures $config.root is set for all backup
-        # types.)  As destination is expected to be local, no user/host needed.
-        $root = $config.root
-    }
-    elseif ($config.type -eq "host")
-    {
-        # Host backups can use rclone or rsync.  $root must include not only
-        # the root path on the remote system, but also the remote name/address.
-        # If the job uses rsync, it also needs the username to connect as.
-        # If $config.remote already starts with the username (username@remote),
-        # do not add it again.  Get-Config sets the default username if not
-        # provided.  If a job specifies its own, use that instead.
-
-        # If job uses rsync...
-        if ($job.command.exec -match "rsync(\.exe)?$") {
-            # If $config.remote does not already start with username@...
-            if ($config.remote -notmatch "^.*@.*") {
-                # Prepend the "user" defined at command, job, or config level
-                if ($job.command.user) {
-                    $config.remote = "$($job.command.user)@$($config.remote)"
-                } elseif ($job.user) {
-                    $config.remote = "$($job.user)@$($config.remote)"
-                } else {
-                    $config.remote = "$($config.user)@$($config.remote)"
-                }
-            }
-        }
-        $root = "$($config.remote):$($config.root)"
-    }
-    else
-    {
-        # Cloud backups use rclone only.  Rclone handles connecting/user auth
-        $root = "$($config.remote):$($config.root)"
-    }
-
-    # "source" is absolute path to source
-    if ([bool]($job.PSObject.Properties.Name -match "source$")) {
+    if ($job | Get-Member -Name 'source') {
         $src = $job.source | Out-Path
-    }
-    # "sourceRemote" relative to root/trunk
-    elseif ([bool]($job.PSObject.Properties.Name -match "sourceRemote")) {
-        $src = [System.IO.Path]::Combine($root, $trunk, $job.sourceRemote) | Out-Path
-    }
-    else {
+    } elseif ($job | Get-Member -Name "sourceRemote") {
+        $src = [System.IO.Path]::Combine($remotePath, $trunk, $job.sourceRemote) | Out-Path
+        # If sourceRemote is an empty string, we're trying to copy the trunk dir contents?
+        # rsync needs trailing '/' to copy contents instead of dir itself
+        if ($job.sourceRemote -eq '') { $src += '/' }
+    } else {
         $src = ""
     }
 
-    # "destination" is absolute path to destination.  Must not be empty/whitespace,
-    # else use root/trunk/destinationRemote
-    if ([bool]($job.PSObject.Properties.Name -match "destination$") -and ([string]$job.destination).Trim()) {
+    if ($job | Get-Member -Name "destination") {
         $dest = $job.destination | Out-Path
-    # "destinationRemote" relative to root/trunk, if empty dest = root/trunk
+    } elseif ($job | Get-Member -Name "destinationRemote") {
+        $dest = [System.IO.Path]::Combine($remotePath, $trunk, $job.destinationRemote) | Out-Path
     } else {
-        $dest = [System.IO.Path]::Combine($root, $trunk, $job.destinationRemote) | Out-Path
+        $dest = ""
     }
 
-    $cmdline += @($src, $dest)
+    if ($src)  { $cmdline += @($src)  }
+    if ($dest) { $cmdline += @($dest) }
 
     $job | Add-Member -MemberType NoteProperty -Name 'commandline' -Value "$cmdline"
     return $job.commandline

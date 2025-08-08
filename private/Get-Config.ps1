@@ -2,10 +2,10 @@
 function Get-Config {
     param(
         [string] $configName,
-
-        # These will override values specified in the config if present
-        [string] $trunk,
-        [string] $localBackupRoot
+        # Override params
+        [string] $remote,
+        [string] $root,
+        [string] $trunk
     )
  
     $configDir = Join-Path $HOME ".config" "rbackup"
@@ -24,56 +24,60 @@ function Get-Config {
         throw "'$configName': Not found"
     }
 
-    # All configs must have backup type
-    # Supported types: "local", "cloud", "host"
-    if ($config.type -ne "local" `
-        -and $config.type -ne "cloud" `
-        -and $config.type -ne "host") {
-        throw "${file} - required attribute `"type`" must be one of: [`"local`", `"cloud`", `"host`"]"
-    } 
-
-    # If backup type is local, $localBackupRoot overrides config "root"
-    if ($config.type -eq "local") {
-        if ($localBackupRoot) {
-            $config | Add-Member -MemberType NoteProperty -Name 'root' -Value $localBackupRoot -Force
-        }
+    #region Overrides
+    # (Different param sets, only one should be nonnull)
+    if ($root) {
+        $config | Add-Member -MemberType NoteProperty -Name 'root' -Value $root -Force
+    } elseif ($remote) {
+        # [$user@]$remote[:$root]
+        if ($remote -like '*@*') { $user, $remote = $remote.Split('@', 2) }
+        if ($remote -like '*:*') { $remote, $root = $remote.Split(':', 2) }
+        $config | Add-Member -MemberType NoteProperty -Name 'remote' -Value $remote -Force
+        if ($root) { $config | Add-Member -MemberType NoteProperty -Name 'root' -Value $root -Force }
+        if ($user) { $config | Add-Member -MemberType NoteProperty -Name 'user' -Value $user -Force }
     }
-
-    # Override config "trunk" if script param set
     if ($trunk) {
         $config | Add-Member -MemberType NoteProperty -Name 'trunk' -Value $trunk -Force
     }
+    #endregion
 
-    # If trunk is not defined either by the script or config, set the default
+    #region Requirements
+    if ($config.type -notin @('local', 'cloud', 'host')) {
+        throw "${file} - config `"type`" must be one of: [`"local`", `"cloud`", `"host`"]"
+    } 
+
+    # These are not required if you only want to use "source" and "destination"
+    # absolute paths for backups.
+    if (-not $config.root) {
+        Write-Warning "${file} - no `"root`" set.  Should be root of backup."
+    }
+
+    if ($config.type -in @('cloud', 'host') -and -not $config.remote) {
+        Write-Warning "${file} - no `"remote`" set.  Should be target machine/rclone remote."
+    }
+    #endregion
+
+    #region Defaults
+    # Trunk - local/cloud: $machineName, host: empty string
     $machineName = [Environment]::MachineName
-    if (-not [bool]($config.PSObject.Properties.Name -match "trunk")) {
-        if ($config.type -eq "local" -or $config.type -eq "cloud") {
+    if (-not ($config | Get-Member -Name 'trunk' -MemberType NoteProperty)) {
+        if ($config.type -in @('local', 'cloud')) {
             $config | Add-Member -MemberType NoteProperty -Name 'trunk' -Value $machineName
         } else {
-            # "host" jobs default trunk is empty string 
             $config | Add-Member -MemberType NoteProperty -Name 'trunk' -Value ""
         }
     }
 
-    # "root" is required for all backup types
-    if ($config.root -isnot [String]) {
-        throw "${file} - required attribute `"root`" must be set to root of backup."
+    # "host" backup types are to a networked host. Jobs can use rclone or rsync.
+    # Rclone takes care of user auth when setting up a new remote but rsync will
+    # need to be told what user to connect as. If not specified, get current user.
+    # (USERNAME - windows, USER - linux/mac)
+    if (-not ($config | Get-Member -Name 'user' -MemberType NoteProperty)) {
+        $user = $env:USERNAME ?? $env:USER
+        $config | Add-Member -MemberType NoteProperty -Name 'user' -Value $user
+        Write-Warning "${file} - `"host`" config with unset `"user`", assuming default ($user)"
     }
-
-    # "remote" is required for cloud and host backup types
-    if ($config.type -match "^cloud|host$" -and -not $config.remote) {
-        throw "${file} - attribute `"remote`" unset.  Cannot run rclone/rsync jobs without it."
-    }
-
-    # "host" backup types are to a networked host.  These can run both rclone
-    # and rsync jobs.  For rclone jobs (remote type sftp, etc), you specify a
-    # username when you set up the remote.  For rsync, you need to supply a
-    # username in the config.  If it's not set, we'll default to the current
-    # user on this machine.
-    if ($config.type -eq "host" -and -not $config.user) {
-        $config | Add-Member -MemberType NoteProperty -Name 'user' -Value $env:UserName
-        Write-Warning "${file} - `"host`" config with unset `"user`", assuming default ($env:UserName)"
-    }
+    #endregion
 
     return $config
 }

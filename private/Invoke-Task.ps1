@@ -13,7 +13,7 @@ function Invoke-Task {
             $str
         }
         $cmd = $task.command -join " "
-        Write-Log "shell> $cmd"
+        Script:Write-Logger "shell> $cmd"
 
         if ($IsWindows) {
             cmd /c $cmd 2>&1
@@ -22,13 +22,13 @@ function Invoke-Task {
         }
         $exitCode = $LASTEXITCODE
         if ($exitCode -ne 0) {
-            throw "Task failed."
+            throw "Task '$($task.name)' failed."
         }
 
     }
     # ...and "ps" strings using powershell
     elseif ($task.ps -is [String]) {
-        Write-Log "   PS> $($task.ps)"
+        Script:Write-Logger "   PS> $($task.ps)"
         Invoke-Expression -Command $task.ps
     }
 }
