@@ -75,7 +75,9 @@ function Get-Config {
     if (-not ($config | Get-Member -Name 'user' -MemberType NoteProperty)) {
         $user = $env:USERNAME ?? $env:USER
         $config | Add-Member -MemberType NoteProperty -Name 'user' -Value $user
-        Write-Warning "${file} - `"host`" config with unset `"user`", assuming default ($user)"
+        if ($config.type -eq 'host') {
+            Write-Warning "${file} - `"host`" config with unset `"user`", assuming default ($user)"
+        }
     }
     #endregion
 
