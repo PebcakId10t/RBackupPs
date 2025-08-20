@@ -284,6 +284,13 @@ to the user running the script.  Can be overridden by individual jobs.
 (`"$remote:$root/$trunk"`) when using a relative source/destination.  Can be
 overridden by individual jobs.
 
+- `"logFile"` - Set the path to the logfile to use.  If this is set, logging to
+file can still be disabled for individual script runs by using `-LogTo console`.
+(This is helpful with `rclone` as it seems to only be capable of logging to either
+the console or a file, not both at the same time.  Use `-l console` if you're in a
+hurry to run your normal backup - ie. end of work day - and don't want to go
+hunting through logfiles afterward to make sure it worked correctly.)
+
 - `"timeFormat"` - Change the time format for logging if desired.
 See [date and time formats](https://learn.microsoft.com/en-us/dotnet/standard/base-types/standard-date-and-time-format-strings).
 
