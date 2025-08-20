@@ -1,5 +1,7 @@
 # RBackupPs
 
+Python version [here](https://github.com/PebcakId10t/RBackupPy)
+
 PowerShell backup script for rclone/rsync, intended for backing up individual
 directories (not full system backups).  Backup jobs are defined in JSON
 config files and processed in groups.  Use `-IncludeGroups group1, group2 ...`
