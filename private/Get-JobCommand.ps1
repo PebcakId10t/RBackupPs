@@ -35,7 +35,7 @@ function Get-JobCommand {
     $remotePath = ($remote -and $config.type -ne "local") ? "${remote}:${root}" : "$root"
     if ($config.type -eq "host") {
         if ($job.command.exec -match "rsync(\.exe)?$") {
-            if ($remote -and $remote -notmatch "^.*@.*") {
+            if ($remote -and $remote -notmatch "^{$user}@.*") {
                 $remote = "${user}@${remote}"
                 $remotePath = "${user}@${remotePath}"
             }
