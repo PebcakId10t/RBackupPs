@@ -1,0 +1,42 @@
+{
+    "remote": "remotename",
+    "root": "my/root",
+    "groups": [
+        {
+            "jobs": [
+                {
+                    "enabled": true,
+                    "name": "job1",
+                    "source": "/some/path",
+                    // relative (automatically prepends $remotePath/$trunk)
+                    "destinationRemote": "remoteDir",
+                    "command": {
+                        "exec": "rclone",
+                        "subcommand": "copy",
+                        "args": [
+                            "--no-traverse"
+                        ]
+                    }
+                // rclone copy --no-traverse /some/path remotename:my/root/<myhostname>/remoteDir
+                },
+                {
+                    "enabled": true,
+                    "name": "job2",
+                    "source": "$HOME/path/to/back/up/",
+                    // <myhostname>/<date>
+                    "trunk": "$machineName/$date",
+                    // absolute path with 2 vars
+                    "destination": "$remotePath/$trunk/path/to/dest",
+                    "command": {
+                        "exec": "rclone",
+                        "subcommand": "sync",
+                        "args": [
+                            "--update"
+                        ]
+                    }
+                // rclone sync --update $HOME/path/to/back/up/ remotename:my/root/<myhostname>/<date>/path/to/dest
+                }
+            ]
+        }
+    ]
+}

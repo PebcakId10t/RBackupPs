@@ -1,0 +1,22 @@
+{
+    "root": "E:\\Backup",
+    "groups": [
+        {
+            "jobs": [
+                {
+                    "enabled": true,
+                    "name": "home",
+                    "source": "$HOME/",
+                    "destinationRemote": "",
+                    "command": {
+                        "exec": "rclone",
+                        "subcommand": "sync",
+                        "args": [
+                        ]
+                    }
+                // rclone sync $HOME/ E:/Backup/<myhostname>
+                }
+            ]
+        }
+    ]
+}

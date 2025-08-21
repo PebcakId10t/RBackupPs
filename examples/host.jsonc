@@ -1,0 +1,25 @@
+{
+    "remote": "my@remotename:/home/me",
+    "groups": [
+        {
+            "jobs": [
+                {
+                    "enabled": true,
+                    "name": "rsync example",
+                    "source": "$HOME/Music/",
+                    "destination": "$remotePath/Music",
+                    "command": {
+                        "exec": "rsync",
+                        "args": [
+                            "-prtvz",
+                            "--chmod",
+                            "D0755,F0644",
+                            "--delete-after"
+                        ]
+                    }
+                // syncs ~/Music enforcing perms & preserving modtimes to 'my@remotename:/home/me/Music'
+                }
+            ]
+        }
+    ]
+}
