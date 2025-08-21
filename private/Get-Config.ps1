@@ -24,34 +24,56 @@ function Get-Config {
         throw "'$configName': Not found"
     }
 
-    #region Overrides
-    # (Different param sets, only one should be nonnull)
+    #region Config user/remote/root
+    # TODO: Probably a better way to do this that's less confusing / horrifying
+    $u, $r = '', ''
+    $configUser, $configRoot = $config.user, $config.root
+    $rm = $config.remote
+    if ($rm -like '*@*') { $u, $rm = $rm.Split('@', 2) }
+    if ($rm -like '*:*') { $rm, $r = $rm.Split(':', 2) }
+    if ($rm) { $config | Add-Member -MemberType NoteProperty -Name 'remote' -Value $rm -Force }
+    # No -Force, only take user/root from remote string if not set by individual "user" / "root" attr
+    if ($u -and -not $configUser) { $config | Add-Member -MemberType NoteProperty -Name 'user' -Value $u }
+    if ($r -and -not $configRoot) { $config | Add-Member -MemberType NoteProperty -Name 'root' -Value $r }
+    #endregion
+
+    #region Commandline overrides
+    # (Different param sets, only one will be set)
     if ($root) {
         $config | Add-Member -MemberType NoteProperty -Name 'root' -Value $root -Force
     } elseif ($remote) {
-        # [$user@]$remote[:$root]
         if ($remote -like '*@*') { $user, $remote = $remote.Split('@', 2) }
         if ($remote -like '*:*') { $remote, $root = $remote.Split(':', 2) }
         $config | Add-Member -MemberType NoteProperty -Name 'remote' -Value $remote -Force
-        if ($root) { $config | Add-Member -MemberType NoteProperty -Name 'root' -Value $root -Force }
         if ($user) { $config | Add-Member -MemberType NoteProperty -Name 'user' -Value $user -Force }
+        if ($root) { $config | Add-Member -MemberType NoteProperty -Name 'root' -Value $root -Force }
     }
     if ($trunk) {
         $config | Add-Member -MemberType NoteProperty -Name 'trunk' -Value $trunk -Force
     }
     #endregion
 
-    #region Requirements
+    #region Missing type/root/remote warnings
+    if (-not ($config | Get-Member -Name 'type' -MemberType NoteProperty)) {
+        $haveRemote, $haveUser = $config.remote, $config.user
+        $warn = "Missing config type"
+        if ($haveRemote -and $haveUser) {
+            Write-Warning "$warn - have remote and user so assuming type HOST"
+            $config | Add-Member -MemberType NoteProperty -Name 'type' -Value 'host'
+        } elseif ($haveRemote) {
+            Write-Warning "$warn - have remote so assuming type CLOUD"
+            $config | Add-Member -MemberType NoteProperty -Name 'type' -Value 'cloud'
+        } else {
+            Write-Warning "$warn - no remote so assuming type LOCAL"
+            $config | Add-Member -MemberType NoteProperty -Name 'type' -Value 'local'
+        }
+    }
     if ($config.type -notin @('local', 'cloud', 'host')) {
         throw "${file} - config `"type`" must be one of: [`"local`", `"cloud`", `"host`"]"
-    } 
-
-    # These are not required if you only want to use "source" and "destination"
-    # absolute paths for backups.
+    }
     if (-not $config.root) {
         Write-Warning "${file} - no `"root`" set.  Should be root of backup."
     }
-
     if ($config.type -in @('cloud', 'host') -and -not $config.remote) {
         Write-Warning "${file} - no `"remote`" set.  Should be target machine/rclone remote."
     }
