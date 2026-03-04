@@ -141,7 +141,7 @@ function Start-RBackupPS {
                 Script:Write-Logger " "
                 Script:Write-Logger "Job: '$($job.name)' - $($job.description)"
                 Script:Write-Logger "Command: $commandline"
-                Script:Write-Logger ('-'*(([string]$commandline).Length+9))
+                Script:Write-Logger ('-'*(([string]"$commandline").Length+9))
                 # Wait-Logging
                 if (-not $Interactive -or (Read-YesNoChoice "`nRun job '$($job.name)'?" -Default 'Yes')) {
                     try {

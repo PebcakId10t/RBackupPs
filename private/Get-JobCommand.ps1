@@ -91,6 +91,7 @@ function Get-JobCommand {
 
     if ($job | Get-Member -Name 'source') {
         $src = $job.source | Out-Path
+		write-debug "src elements: "
     } elseif ($job | Get-Member -Name "sourceRemote") {
         $src = [System.IO.Path]::Combine($remotePath, $trunk, $job.sourceRemote) | Out-Path
         # If sourceRemote is an empty string, we're trying to copy the trunk dir contents?
@@ -111,6 +112,6 @@ function Get-JobCommand {
     if ($src)  { $cmdline += @($src)  }
     if ($dest) { $cmdline += @($dest) }
 
-    $job | Add-Member -MemberType NoteProperty -Name 'commandline' -Value "$cmdline"
+    $job | Add-Member -MemberType NoteProperty -Name 'commandline' -Value $cmdline
     return $job.commandline
 }

@@ -16,9 +16,9 @@ function Invoke-Task {
         Script:Write-Logger "shell> $cmd"
 
         if ($IsWindows) {
-            cmd /c $cmd 2>&1
+            cmd /c $task.command 2>&1
         } else {
-            sh -c $cmd 2>&1
+            sh -c $task.command 2>&1
         }
         $exitCode = $LASTEXITCODE
         if ($exitCode -ne 0) {
