@@ -685,6 +685,15 @@ and a few variables are available for ... whatever (path substitutions, etc):
 
 - `$machineName`: Hostname (obtained by `[Environment]::MachineName`).
 
+- `$os`: Lowercase OS type, should work for Windows (`windows`), supported Linux
+distros (`linux`), or macOS (`darwin`). If it's none of these, will assume it's
+some kind of unix.
+
+- `$arch`: Lowercase architecture type (`x86_64` and `arm64` work, haven't tested
+others).
+
+- `$osarch`: "`$os`-`$arch`" (eg. `windows-x86_64`).
+
 - `$configName`: Name (stem only) of the config file, useful for naming log files.
 
 - `$date`: Date the script was run in `yyyy-MM-dd` format.

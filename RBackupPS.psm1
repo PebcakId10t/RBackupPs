@@ -45,10 +45,16 @@ function Start-RBackupPS {
         $configName = Split-Path $ConfigFile -LeafBase
         $datetime = (Get-Date -Format "yyyy-MM-dd-HHmmss")
         $date = (Get-Date -Format "yyyy-MM-dd")
-
+        $os = ($IsWindows ? 'windows' :
+            ($IsLinux ? 'linux' :
+            ($IsMacOS ? 'darwin' :
+            'unix')))
+        $arch = [System.Runtime.InteropServices.RuntimeInformation,mscorlib]::
+            OSArchitecture.ToString().ToLower().Replace('x64', 'x86_64')
+        $osarch = "$os-$arch"
         # Shut up stupid unused variable warnings
         Write-Debug "Config name: $configName"
-        Write-Debug "Running on host: $machineName, on $date"
+        Write-Debug "Running on host: $machineName ($osarch), on $date"
         Write-Debug "$datetime"
 
         <# Keeps paths cross-platform (replaces \ with /), expands variables. #>
